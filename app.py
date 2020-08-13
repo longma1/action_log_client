@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from dateutil import parser
 
@@ -14,6 +15,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///test.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
+
 # Models
 class Log(db.Model):
     __tablename__ = 'log'
@@ -25,6 +27,8 @@ class Log(db.Model):
 class Actions(db.Model):
     __tablename__ = 'actions'
     action_id = db.Column(db.Integer, primary_key=True)
+    # assuming we have finite number of action type I would have liked to change this to an ENUM field, but since I
+    # do not have the complete list of all possible action type, this will be left as a string field.
     action_type = db.Column(db.String(16), unique=False, nullable=False)
     time = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -41,19 +45,66 @@ class Actions(db.Model):
 @app.route("/log", methods=['POST'])
 def log():
     package = request.get_json()
-    current_log = Log(user_id=package['userId'], session_id=package['sessionId'])
-    db.session.add(current_log)
-    for action in package['actions']:
-        action = Actions(
-            properties=str(action['properties']),
-            action_type=action['type'],
-            time=parser.parse(action['time']),
-            log=current_log)
-        db.session.add(action)
+    try:
+        current_log = Log(user_id=package['userId'], session_id=package['sessionId'])
+        db.session.add(current_log)
+        for action in package['actions']:
+            action = Actions(
+                properties=json.dumps(action['properties']),
+                action_type=action['type'],
+                time=parser.parse(action['time']),
+                log=current_log)
+            db.session.add(action)
 
-    db.session.commit()
+        db.session.commit()
 
-    return 'log'
+        return json.dumps({'success': True}), 200, {'ContentType': 'application/json'}
+    except (KeyError, TypeError) as e:
+        return json.dumps({'success': False, 'errorCode': 'Bad request'}), 400, {'ContentType': 'application/json'}
+
+
+@app.route("/log", methods=['GET'])
+def generate_report():
+    print('hello')
+    requested_id = request.args.get('userID')
+    start_time = None
+    end_time = None
+    if request.args.get('startTime'):
+        start_time = parser.parse(request.args.get('startTime'))
+    if request.args.get('endTime'):
+        end_time = parser.parse(request.args.get('endTime'))
+    log_type = request.args.get('logType')
+
+    query = db.session.query(Log, Actions).filter(Actions.log_id == Log.log_id)
+
+    if requested_id:
+        query.filter(Log.user_id == requested_id)
+
+    if start_time:
+        query.filter(Actions.time > start_time)
+
+    if end_time:
+        query.filter(Actions.time < end_time)
+
+    if log_type:
+        query.filter(Actions.action_type == log_type)
+
+    result = query.order_by(Log.log_id).all()
+
+    log_list = []
+
+    for row in result:
+        report_row = {
+            'userId': row[0].user_id,
+            'sessionId': row[0].session_id,
+            'time': str(row[1].time),
+            'type': row[1].action_type,
+            'properties': json.loads(row[1].properties)
+        }
+
+        log_list.append(report_row)
+
+    return json.dumps(log_list), 200, {'ContentType': 'application/json'}
 
 
 if __name__ == "__main__":
