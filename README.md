@@ -15,7 +15,8 @@ to run tests:
 >python test_app.py
 
 
-##Api documentation
+## Api documentation
+
 **URL**
 `/log`
 
@@ -94,8 +95,8 @@ to run tests:
 
 >400 Bad Request
    
-
-##Scalability
+   
+## Scalability
 
 The program as of right now scales poorly and would benefit little from being deployed
 on the cloud simply due to the limitations of SQLite which is scales poorly because it is limited to 1 writer at a time.
