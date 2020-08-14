@@ -1,6 +1,8 @@
 import json
 from datetime import datetime
+
 from dateutil import parser
+from dateutil.parser import ParserError
 
 from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
@@ -59,37 +61,37 @@ def log():
         db.session.commit()
 
         return json.dumps({'success': True}), 200, {'ContentType': 'application/json'}
-    except (KeyError, TypeError) as e:
+    except (KeyError, TypeError, ParserError) as e:
+        db.session.flush()
         return json.dumps({'success': False, 'errorCode': 'Bad request'}), 400, {'ContentType': 'application/json'}
 
 
 @app.route("/log", methods=['GET'])
 def generate_report():
-    print('hello')
-    requested_id = request.args.get('userID')
+    requested_id = request.args.get('userId')
     start_time = None
     end_time = None
     if request.args.get('startTime'):
         start_time = parser.parse(request.args.get('startTime'))
     if request.args.get('endTime'):
         end_time = parser.parse(request.args.get('endTime'))
-    log_type = request.args.get('logType')
+    log_type = request.args.get('type')
 
     query = db.session.query(Log, Actions).filter(Actions.log_id == Log.log_id)
 
     if requested_id:
-        query.filter(Log.user_id == requested_id)
+        query = query.filter(Log.user_id == requested_id)
 
     if start_time:
-        query.filter(Actions.time > start_time)
+        query = query.filter(Actions.time >= start_time)
 
     if end_time:
-        query.filter(Actions.time < end_time)
+        query = query.filter(Actions.time <= end_time)
 
     if log_type:
-        query.filter(Actions.action_type == log_type)
+        query = query.filter(Actions.action_type == log_type)
 
-    result = query.order_by(Log.log_id).all()
+    result = query.all()
 
     log_list = []
 
@@ -104,7 +106,7 @@ def generate_report():
 
         log_list.append(report_row)
 
-    return json.dumps(log_list), 200, {'ContentType': 'application/json'}
+    return json.dumps(dict(result = log_list)), 200, {'Content-Type': 'application/json'}
 
 
 if __name__ == "__main__":
