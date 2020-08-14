@@ -44,8 +44,19 @@ class Actions(db.Model):
     log = db.relationship('Log', backref=db.backref('log', lazy=True))
 
 
+
 @app.route("/log", methods=['POST'])
 def log():
+    """Extracts the log object in the json body of the request and store it in the database
+
+     The function takes the json representation of a log event passed in the http post request stores it into the
+     database based on the schema. The object is split into a Log component and an action component according to the
+     schema above
+
+
+     Returns: A json object that says success = true or false in an http response. The response code will be 200 for
+     a successful POST operation and 400 for a failed operation
+    """
     package = request.get_json()
     try:
         current_log = Log(user_id=package['userId'], session_id=package['sessionId'])
@@ -68,6 +79,17 @@ def log():
 
 @app.route("/log", methods=['GET'])
 def generate_report():
+    """Generates array of logged events based on the criteria in the url query
+
+     Takes url query parameters from the get request and generates the list of logged events that fits the criteria
+     listed. This function expects up 4 query strings: userId, type, startTime, endTime, filtering based on the
+     userId, eventType, events after and events before time accordingly. Leaving the query string blank will result
+     in all available events being sent.
+
+
+     Returns: A json object that has only 1 parameter, result which is an array of all event logs that fits the
+     criteria listed.
+    """
     requested_id = request.args.get('userId')
     start_time = None
     end_time = None
